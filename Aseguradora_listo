@@ -1,0 +1,186 @@
+# Tarea 1 - Buenas Prácticas y SOLID
+# Equipo: alfa-buena-maravilla-onda-dinamita-escuadron-lobo
+import abc
+
+# Excepciones personalizadas para validación
+class EdadInvalidaError(Exception):
+    pass
+
+class SumaAseguradaInvalidaError(Exception):
+    pass
+
+class OpcionInvalidaError(Exception):
+    pass
+
+class TasaCambioInvalidaError(Exception):
+    pass
+
+# OCP: Definimos una estrategia base para que podamos agregar nuevos factores en el futuro sin modificar el código.
+# ISP: Creamos una interfaz mínima con un solo método para no forzar dependencias innecesarias.
+class FactorEdadStrategy(abc.ABC):
+    @abc.abstractmethod
+    def obtener_factor(self, edad: int) -> float:
+        pass
+
+# LSP: Garantizamos que las implementaciones devuelvan el factor numérico esperado sin alterar la lógica base.
+class FactorFemenino(FactorEdadStrategy):
+    def obtener_factor(self, edad: int) -> float:
+        if 18 <= edad < 25:
+            return 1.5
+        if 25 <= edad < 45:
+            return 1.7
+        if 45 <= edad < 65:
+            return 2.0
+        if 65 <= edad <= 99:
+            return 2.2
+        return 0.0
+
+class FactorMasculino(FactorEdadStrategy):
+    def obtener_factor(self, edad: int) -> float:
+        if 18 <= edad < 25:
+            return 2.0
+        if 25 <= edad < 45:
+            return 2.3
+        if 45 <= edad < 65:
+            return 2.5
+        if 65 <= edad <= 99:
+            return 3.0
+        return 0.0
+
+# SRP: Nos aseguramos de que esta clase se encargue exclusivamente de la conversión de divisas.
+class ConversorMoneda:
+    def __init__(self, tasa=21.13):
+        if tasa <= 0:
+            raise TasaCambioInvalidaError("La tasa de cambio no puede ser negativa o cero.")
+        self.tasa = tasa
+
+    def mxn_a_usd(self, pesos):
+        return pesos / self.tasa
+
+class Asegurado:
+    # DIP: Recibimos la estrategia de edad ya instanciada desde el exterior para evitar el acoplamiento directo.
+    def __init__(self, sa, edad, fuma, sexo, extra_prima, estrategia_factor):
+        self.sa = sa
+        self.edad_original = edad
+        self.fuma = fuma
+        self.sexo = sexo
+        self.extra_prima = extra_prima
+        self.estrategia_factor = estrategia_factor
+        
+        self.edad_ajustada = self._calcular_edad()
+        
+    def _calcular_edad(self):
+        edad = self.edad_original
+        if self.fuma == "No": 
+            edad -= 5
+        if self.sexo == 'F': 
+            edad -= 10
+        if self.extra_prima == "Si": 
+            edad += 10
+        
+        return max(18, min(edad, 99))
+
+    def calcular_prima(self):
+        k = self.estrategia_factor.obtener_factor(self.edad_ajustada)
+        return (self.sa * k) / 1000
+
+def pedir_datos_asegurado():
+    while True:
+        try:
+            sa = float(input("Suma asegurada (500,000 - 3,000,000): "))
+            if sa < 500000 or sa > 3000000:
+                raise SumaAseguradaInvalidaError("El monto está fuera del rango permitido.")
+            
+            edad = int(input("Edad (18-99): "))
+            if edad < 18 or edad > 99:
+                raise EdadInvalidaError("La edad tiene que estar entre 18 y 99.")
+            
+            sexo = input("Sexo (M/F): ").strip().upper()
+            if sexo not in ['M', 'F']:
+                raise OpcionInvalidaError("Ingresa solamente M o F.")
+                
+            fuma = input("¿Fuma? (Si/No): ").strip().capitalize()
+            if fuma not in ["Si", "No"]:
+                raise OpcionInvalidaError("Responde Si o No.")
+                
+            ep = input("¿Extra-prima? (Si/No): ").strip().capitalize()
+            if ep not in ["Si", "No"]:
+                raise OpcionInvalidaError("Responde Si o No.")
+            
+            estrategia = FactorFemenino() if sexo == 'F' else FactorMasculino()
+            return Asegurado(sa, edad, fuma, sexo, ep, estrategia)
+            
+        except ValueError:
+            print("Error: Ingresaste letras donde iba un número. Intenta de nuevo.")
+        except Exception as e:
+            print(f"Error en los datos: {e}. Vamos a repetirlo.")
+
+# SRP: Extrajimos la lógica de métricas a su propia clase para no saturar la función principal.
+class AnalizadorLote:
+    @staticmethod
+    def generar_reporte(asegurados):
+        if not asegurados:
+            return
+
+        primas = [aseg.calcular_prima() for aseg in asegurados]
+        prima_promedio = sum(primas) / len(primas)
+        prima_max = max(primas)
+        prima_min = min(primas)
+        
+        asegurados_con_ep = [a for a in asegurados if a.extra_prima == "Si"]
+        mayor_ep = max(asegurados_con_ep, key=lambda a: a.calcular_prima()) if asegurados_con_ep else None
+
+        print("\n--- REPORTE FINAL ---")
+        print(f"Prima promedio: ${prima_promedio:,.2f} MXN")
+        print(f"Prima máxima: ${prima_max:,.2f} MXN")
+        print(f"Prima mínima: ${prima_min:,.2f} MXN")
+        
+        if mayor_ep:
+            print(f"Prima más alta (con Extra-Prima): ${mayor_ep.calcular_prima():,.2f} MXN")
+
+# SRP: Asignamos a esta clase el manejo exclusivo de la persistencia (I/O).
+class ExportadorArchivo:
+    # DIP: Inyectamos el conversor de moneda como parámetro en lugar de instanciarlo internamente.
+    def __init__(self, conversor: ConversorMoneda, nombre_archivo: str = "carnets_asegurados.txt"):
+        self.conversor = conversor
+        self.nombre_archivo = nombre_archivo
+
+    def exportar(self, asegurados):
+        try:
+            with open(self.nombre_archivo, "w", encoding="utf-8") as archivo:
+                for i, aseg in enumerate(asegurados):
+                    p_mxn = aseg.calcular_prima()
+                    p_usd = self.conversor.mxn_a_usd(p_mxn)
+                    
+                    texto = (f"Asegurado {i+1} | Edad: {aseg.edad_original} | Sexo: {aseg.sexo} | "
+                             f"Fuma: {aseg.fuma} | EP: {aseg.extra_prima} | SA: ${aseg.sa:,.2f} | "
+                             f"Prima MXN: ${p_mxn:,.2f} | Prima USD: ${p_usd:,.2f}\n")
+                    archivo.write(texto)
+            print(f"\nListo. Los datos se exportaron correctamente en '{self.nombre_archivo}'")
+        except IOError:
+            print("Hubo un error al intentar escribir el archivo en el disco.")
+
+def main():
+    try:
+        n_asegurados = int(input("¿Cuántos asegurados vas a registrar? "))
+    except ValueError:
+        print("Por favor, ingresa un número entero válido.")
+        return
+
+    if n_asegurados <= 0:
+        print("Lote vacío. Terminando el programa.")
+        return
+
+    lista_asegurados = []
+    for i in range(n_asegurados):
+        print(f"\n--- Asegurado {i + 1} ---")
+        lista_asegurados.append(pedir_datos_asegurado())
+
+    AnalizadorLote.generar_reporte(lista_asegurados)
+
+    conversor = ConversorMoneda()
+    exportador = ExportadorArchivo(conversor)
+    exportador.exportar(lista_asegurados)
+
+if __name__ == "__main__":
+    main()
