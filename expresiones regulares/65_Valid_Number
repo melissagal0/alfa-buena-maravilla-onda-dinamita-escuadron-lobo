@@ -1,0 +1,39 @@
+# Complejidad temporal: O(1) amortizado por operacion
+# Complejidad espacial: O(n)
+# Justificacion: Guardamos n elementos en dos listas como pilas. El trasvase de entrada a salida solo pasa una vez por elemento.
+
+class MyQueue:
+
+    def __init__(self):
+        # Usamos dos listas de Python pero tratandolas estrictamente como pilas (LIFO)
+        # pila_entrada: aqui cae todo lo nuevo que metemos
+        # pila_salida: aqui volteamos los datos para sacarlos en orden FIFO
+        self.pila_entrada = []
+        self.pila_salida = []
+
+    def push(self, x: int) -> None:
+        # Para encolar solo metemos el dato al final de la pila de entrada con append
+        self.pila_entrada.append(x)
+
+    def pop(self) -> int:
+        # Para desencolar nos aseguramos que los datos esten listos en la salida
+        self._trasvasar_elementos()
+        # Sacamos el elemento de hasta arriba (el mas viejo de la cola) con pop basico
+        return self.pila_salida.pop()
+
+    def peek(self) -> int:
+        # Para ver quien esta al frente sin quitarlo, preparamos la salida y checamos el tope
+        self._trasvasar_elementos()
+        return self.pila_salida[-1]
+
+    def empty(self) -> bool:
+        # La cola esta vacia si no hay nada en la entrada ni en la salida
+        return len(self.pila_entrada) == 0 and len(self.pila_salida) == 0
+
+    def _trasvasar_elementos(self):
+        # El truco: si la pila de salida ya no tiene nada, vaciamos la de entrada ahi.
+        # Al sacarlos de una y meterlos a la otra, el orden se invierte
+        # y el primer elemento que entro queda mero arriba listo para salir.
+        if not self.pila_salida:
+            while self.pila_entrada:
+                self.pila_salida.append(self.pila_entrada.pop())
