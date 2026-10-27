@@ -1,0 +1,52 @@
+# Complejidad temporal: O(n)
+# Complejidad espacial: O(n)
+# Justificacion: Recorremos la cadena s de longitud n una sola vez en un bucle for, y en el peor caso (por ejemplo, "((((("), la pila guardara los n elementos.
+
+class Solution:
+    def isValid(self, s: str) -> bool:
+        # Creamos una lista vacia que vamos a usar como nuestra Pila (Stack).
+        # Recuerda que una pila sigue el principio LIFO (Last In, First Out):
+        # el ultimo elemento que entra es el primero que debe salir.
+        pila = []
+        
+        # Armamos un diccionario que funciona como mapa de Parejas.
+        # Ponemos el simbolo de CIERRE como clave y su APERTURA como valor.
+        # ¿Por que de esta forma? Porque cuando vayamos caminando por la cadena
+        # y nos topemos con un cierre, queremos buscar de volada cual debio ser su apertura.
+        parejas = {
+            ')': '(',
+            ']': '[',
+            '}': '{'
+        }
+        
+        # Empezamos a iterar caracter por caracter sobre el texto de entrada 's'
+        for caracter in s:
+            
+            # Aqui checamos si el caracter actual existe como clave en el diccionario.
+            # Si existe, significa que nos topamos con un cierre: ')', ']' o '}'.
+            if caracter in parejas:
+                
+                # Antes de sacar nada de la pila, hay que validar dos cosas clave:
+                # 1. 'pila': verifica que la pila NO este vacia (si estuviera vacia, 
+                #    significa que nos dieron un cierre sin haber abierto nada antes).
+                # 2. 'pila[-1] == parejas[caracter]': mira el elemento del TOPE sin borrarlo
+                #    y comprueba si coincide con la apertura correspondiente.
+                if pila and pila[-1] == parejas[caracter]:
+                    # ¡Hicieron pareja perfecta! Eliminamos la apertura del tope con .pop()
+                    # Esto toma tiempo O(1) amortizado.
+                    pila.pop()
+                else:
+                    # Si la pila estaba vacia o el simbolo del tope no era su pareja,
+                    # la cadena rompe las reglas. Retornamos False de inmediato.
+                    return False
+            
+            else:
+                # Si el caracter NO estaba en el diccionario, significa que por fuerza
+                # es un simbolo de APERTURA: '(', '[' o '{'.
+                # Lo guardamos en el tope de la pila con .append() para esperar su cierre mas adelante.
+                pila.append(caracter)
+                
+        # Al salir del bucle, revisamos si la pila quedo limpia.
+        # Si len(pila) == 0, significa que todos los simbolos abiertos se cerraron en orden.
+        # Si aun quedan elementos, significa que quedaron aperturas sin cerrar (ejemplo: "(()").
+        return len(pila) == 0
